@@ -181,7 +181,7 @@ button{cursor:pointer}
 <script>
 // 구글 Apps Script 웹앱 주소 (데이터 서버)
 var API_URL = "https://script.google.com/macros/s/AKfycbzwTOwgYY2BSMt4WpZY8L1OmP7Hz4rHeXQeXuTMGKtfLmxOF-EAQitmsO6sC6c5wyVs/exec";
-var VERSION = 'v17 미리 계획';
+var VERSION = 'v18 관리자 전환';
 var QS = new URLSearchParams(location.search);
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -346,6 +346,7 @@ var STAFF={
      var b=x.margin==null?'<span class="badge off">도착 기록 없음</span>':x.margin>=0?'<span class="badge ok">'+x.margin+'분 일찍</span>':'<span class="badge off">'+(-x.margin)+'분 늦음</span>';
      return '<div class="item"><span class="dbox"><b>'+md(x.date).split('/')[1]+'</b><small>'+md(x.date).split('/')[0]+'월 '+wd(x.date)+'</small></span><span><div class="ttl">'+(esc(x.site)||'현장')+'</div><div class="sub">식장 '+esc(x.depBy||'-')+(x.arrAt?' · '+esc(x.arrAt)+' 도착':'')+'</div></span>'+b+'</div>'}).join('')+'</div>'
      :'<p class="small muted" style="margin:0 2px">아직 지난 기록이 없습니다.</p>')+
+   '<div class="sec-t"><h3>관리자</h3></div><button class="item" style="background:var(--surface);border:1px solid var(--line);border-radius:16px" data-admin-login><span class="avatar" style="background:var(--brand);color:var(--brand-fg)">🔒</span><span><div class="ttl">관리자 화면으로</div><div class="sub">비밀번호를 입력하면 관리자 화면이 열립니다</div></span><span class="chev">›</span></button>'+
    '<p class="ver">'+VERSION+'</p>';
  }
 };
@@ -461,6 +462,42 @@ function renderSheet(){
 }
 function sheetValues(){var g=function(id){var el=$('f-'+id);return el?el.value.trim():''};return {row:S.sheet.row||'',date:g('date'),name:g('name'),site:g('site'),depBy:g('depBy'),arrBy:g('arrBy'),addr:g('addr'),park:g('park'),contact:g('contact'),memo:g('memo')}}
 
+/* ---------- 관리자 전환 (비밀번호) ---------- */
+function renderPw(msg){
+  $('sheet').innerHTML='<div class="sheet-bg" data-close><div class="sheet" role="dialog" aria-label="관리자 비밀번호"><span class="grab"></span><h3>관리자 화면</h3>'+
+   '<p class="small muted" style="margin:0">관리자 비밀번호를 입력해 주세요.</p>'+
+   '<div class="pgrid"><label class="full">비밀번호<input type="password" id="pw" inputmode="numeric" autocomplete="off" maxlength="20" style="font-family:var(--f-mono);font-size:22px;letter-spacing:.3em;text-align:center"></label></div>'+
+   (msg?'<p class="margin bad" style="margin:0">'+esc(msg)+'</p>':'')+
+   '<button class="big dark" data-pw-ok>확인</button><button class="linkish" data-close-btn>닫기</button></div></div>';
+  S.pw=true; setTimeout(function(){var el=$('pw');if(el)el.focus()},50);
+}
+function toAdmin(adminKey){
+  S.staffKey=KEY; KEY=adminKey; MODE='admin';
+  S.data=null; S.sched=null; S.schedDate=null; S.seen=null; S.planDirty=false; S.busy=false;
+  $('app').innerHTML='<div class="empty" style="margin:16px"><b>관리자 화면을 여는 중</b>잠시만 기다려 주세요.</div>';
+  S.page='home'; S.sub=null; location.hash='#home'; loadBoard();
+}
+function toStaff(){
+  KEY=S.staffKey; S.staffKey=null; MODE='staff';
+  S.data=null; S.sched=null; S.sheet=null; S.busy=false; renderSheet();
+  $('app').innerHTML='<div class="empty" style="margin:16px"><b>작가 화면으로 돌아가는 중</b>잠시만 기다려 주세요.</div>';
+  S.page='me'; S.sub=null; location.hash='#me'; loadStaff();
+}
+document.addEventListener('click',function(e){
+  if(e.target.closest('[data-admin-login]')){renderPw('');return}
+  if(e.target.closest('[data-to-staff]')){toStaff();return}
+  if(e.target.closest('[data-pw-ok]')){submitPw();return}
+});
+document.addEventListener('keydown',function(e){if(e.key==='Enter'&&e.target.id==='pw'){e.preventDefault();submitPw()}});
+function submitPw(){
+  var v=($('pw')||{}).value||''; if(!v) return;
+  var btn=document.querySelector('[data-pw-ok]'); if(btn){btn.disabled=true;btn.textContent='확인 중…'}
+  fetch(API_URL,{method:'POST',body:JSON.stringify({fn:'apiAdminLogin',args:[KEY,v]})}).then(function(r){return r.json()}).then(function(res){
+    if(res&&res.ok){S.pw=false;$('sheet').innerHTML='';toast('관리자 화면으로 전환했어요.');toAdmin(res.adminKey)}
+    else renderPw((res&&res.msg)||'비밀번호가 맞지 않습니다.');
+  }).catch(function(){renderPw('서버 연결 오류: 잠시 후 다시 시도해 주세요.')});
+}
+
 /* ---------- 렌더 ---------- */
 function editing(){var a=document.activeElement;return S.sheet||S.planDirty||(a&&/INPUT|SELECT|TEXTAREA/.test(a.tagName)&&$('app').contains(a))}
 function render(force){
@@ -469,7 +506,7 @@ function render(force){
   var P=MODE==='admin'?ADMIN:STAFF, T=TITLE[MODE][S.page];
   var title=S.sub?(MODE==='admin'?(S.page==='status'?'직원 상세':T):'일정 상세'):T;
   var lead=S.sub?'<button class="back" data-back aria-label="뒤로">‹</button>':'<img class="logoimg" src="icon-192-v2.png" alt="욱\'s">';
-  var who=!S.sub?'<span class="who">'+(MODE==='admin'?'관리자 · '+esc(S.data.now):esc(S.data.name)+' 작가 · '+esc(S.data.now))+'</span>':'';
+  var who=!S.sub?(MODE==='admin'&&S.staffKey?'<button class="badge" style="border:0;padding:6px 10px;font-size:12px" data-to-staff>작가 화면으로</button>':'<span class="who">'+(MODE==='admin'?'관리자 · '+esc(S.data.now):esc(S.data.name)+' 작가 · '+esc(S.data.now))+'</span>'):'';
   var lateN=MODE==='admin'?S.data.shifts.filter(function(s){return /late/.test(s.key)}).length:0;
   $('app').innerHTML='<header class="hdr">'+lead+'<h2>'+esc(title)+'</h2>'+who+'</header><main class="main">'+P[S.page](S.data)+'</main>'+
     '<div class="tabbar"><nav aria-label="메뉴">'+TABS[MODE].map(function(t){return '<button data-tab="'+t[0]+'"'+(S.page===t[0]?' aria-current="page"':'')+'><span class="'+(t[0]==='status'&&lateN?'dotn':'')+'">'+ICON[t[0]]+'</span>'+t[1]+'</button>'}).join('')+'</nav></div>';
@@ -502,7 +539,7 @@ function ensureSched(){var sel=S.schedDate||(S.data&&S.data.today);if(!sel||!S.d
 document.addEventListener('click',function(e){
   var t=e.target;
   // 일정 추가·수정 창
-  if(t.closest('[data-close-btn]')||(t.hasAttribute&&t.hasAttribute('data-close'))){S.sheet=null;renderSheet();render(true);return}
+  if(t.closest('[data-close-btn]')||(t.hasAttribute&&t.hasAttribute('data-close'))){S.sheet=null;S.pw=false;renderSheet();render(true);return}
   if(t.closest('[data-save]')){var v=sheetValues();
     if(!v.date||!v.name||!v.depBy){toast('날짜, 작가, 식장 도착 시간은 꼭 입력해 주세요.',true);return}
     S.sheet=null;renderSheet();S.schedDate=v.date;$('app').classList.add('busy');call('apiSaveShift',[KEY,v],function(d){S.sched=d;onBoard(d);if(d.date===d.today)S.sched=d;$('app').classList.remove('busy');render(true)});return}
@@ -571,6 +608,7 @@ function reportPush(){
 }
 function pushHTML(){
   var st=PUSH.state, adm=MODE==='admin';
+  if(adm&&S.staffKey) return '';   // 작가 앱에서 비밀번호로 들어온 관리자 화면에서는 알림 설정을 보여 주지 않음
   if(st==='none'||st==='loading') return '';
   if(st==='on') return '<div class="pushbar on">🔔 알림 켜짐 · '+(adm?'출발·지연·도착 소식을 알려 드려요':'일정 전과 확인이 필요할 때 알려 드려요')+'</div>';
   if(st==='off') return '<button class="pushbar btn-push" data-push>🔔 알림 켜기 <small>'+(adm?'작가 출발·지연·도착을 폰으로 받아요':'일정 전에 폰으로 알려 드려요')+'</small></button>';
@@ -592,8 +630,9 @@ document.addEventListener('click',async function(e){
 /* ---------- 시작 ---------- */
 readHash();
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'){S.busy=false;MODE==='admin'?loadBoard():loadStaff()}});
-if(MODE==='admin'){loadBoard();setInterval(function(){loadBoard();if(S.page==='schedule'&&S.schedDate&&S.data&&S.schedDate!==S.data.today&&!S.sheet)call('apiBoard',[KEY,S.schedDate],onBoard)},20000)}
-else{loadStaff();setInterval(loadStaff,30000)}
+function tick(){if(MODE==='admin'){loadBoard();if(S.page==='schedule'&&S.schedDate&&S.data&&S.schedDate!==S.data.today&&!S.sheet)call('apiBoard',[KEY,S.schedDate],onBoard)}else loadStaff()}
+MODE==='admin'?loadBoard():loadStaff();
+setInterval(tick,25000);
 </script>
 </body>
 </html>
