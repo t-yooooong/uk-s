@@ -171,9 +171,21 @@ button{cursor:pointer}
 .toast{background:var(--brand);color:var(--brand-fg);padding:11px 14px;border-radius:12px;font-size:14px;box-shadow:0 6px 24px rgba(0,0,0,.18);max-width:520px;text-align:center}
 .toast.alert{background:var(--late);color:#fff}
 .ver{font-size:11px;color:var(--muted);text-align:center;margin:8px 0 0}
+#splash{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:var(--app);transition:opacity .35s ease}
+#splash img{width:112px;height:112px;border-radius:26px;box-shadow:0 14px 40px rgba(47,90,220,.22)}
+#splash b{font-size:26px;font-weight:700;letter-spacing:.06em;color:var(--ink)}
+#splash.hide{opacity:0;pointer-events:none}
+@media (prefers-reduced-motion:no-preference){
+  #splash img{animation:pop .55s cubic-bezier(.2,.9,.3,1.2) both}
+  #splash b{animation:rise .5s .15s ease-out both}
+  @keyframes pop{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
+  @keyframes rise{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+}
+.ver-old{font-size:11px;color:var(--muted);text-align:center;margin:8px 0 0}
 </style>
 </head>
 <body>
+<div id="splash" aria-label="지각노노"><img src="icon-512-v2.png" alt="" width="112" height="112"><b>지각노노</b></div>
 <div class="wrap" id="app"><div class="empty" style="margin:16px"><b>불러오는 중입니다</b>잠시만 기다려 주세요.</div></div>
 <div id="sheet"></div>
 <div id="toasts" aria-live="polite"></div>
@@ -181,7 +193,7 @@ button{cursor:pointer}
 <script>
 // 구글 Apps Script 웹앱 주소 (데이터 서버)
 var API_URL = "https://script.google.com/macros/s/AKfycbzwTOwgYY2BSMt4WpZY8L1OmP7Hz4rHeXQeXuTMGKtfLmxOF-EAQitmsO6sC6c5wyVs/exec";
-var VERSION = 'v18 관리자 전환';
+var VERSION = 'v19 스플래시';
 var QS = new URLSearchParams(location.search);
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -194,6 +206,10 @@ var audio = null;
 
 /* ---------- 공통 ---------- */
 function $(id){return document.getElementById(id)}
+// 스플래시: 최소 0.9초 보여 주고, 첫 화면이 그려지면 사라짐 (최대 6초)
+var SPLASH_T0=Date.now();
+function hideSplash(){var el=$('splash');if(!el||el.classList.contains('hide'))return;setTimeout(function(){el.classList.add('hide');setTimeout(function(){el.remove()},400)},Math.max(0,900-(Date.now()-SPLASH_T0)))}
+setTimeout(hideSplash,6000);
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function pad(n){return String(n).padStart(2,'0')}
 function toM(t){var m=String(t||'').match(/(\d{1,2}):(\d{2})/);return m?(+m[1])*60+(+m[2]):null}
@@ -212,7 +228,7 @@ function call(fn,args,done){
   fetch(API_URL,{method:'POST',body:JSON.stringify({fn:fn,args:args})})
     .then(function(r){return r.json()})
     .then(function(res){S.busy=false;done(res)})
-    .catch(function(){S.busy=false;$('app').classList.remove('busy');toast('서버 연결 오류: 인터넷 연결을 확인해 주세요.')});
+    .catch(function(){S.busy=false;$('app').classList.remove('busy');hideSplash();toast('서버 연결 오류: 인터넷 연결을 확인해 주세요.')});
 }
 function toast(t,alert){var el=document.createElement('div');el.className='toast'+(alert?' alert':'');el.innerHTML=t;$('toasts').appendChild(el);setTimeout(function(){el.remove()},alert?8000:3000)}
 function beep(){if(!S.sound||!audio)return;try{var o=audio.createOscillator(),g=audio.createGain();o.frequency.value=880;o.connect(g);g.connect(audio.destination);g.gain.setValueAtTime(.2,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.6);o.start();o.stop(audio.currentTime+.6)}catch(e){}}
@@ -502,6 +518,7 @@ function submitPw(){
 function editing(){var a=document.activeElement;return S.sheet||S.planDirty||(a&&/INPUT|SELECT|TEXTAREA/.test(a.tagName)&&$('app').contains(a))}
 function render(force){
   if(!S.data) return;
+  hideSplash();
   if(!force&&editing()) return;
   var P=MODE==='admin'?ADMIN:STAFF, T=TITLE[MODE][S.page];
   var title=S.sub?(MODE==='admin'?(S.page==='status'?'직원 상세':T):'일정 상세'):T;
@@ -516,7 +533,7 @@ function render(force){
 function loadStaff(){if(S.busy)return;S.busy=true;call('apiStaff',[KEY],onStaff)}
 function onStaff(d){
   $('app').classList.remove('busy');
-  if(d.error){$('app').innerHTML='<div class="err">'+esc(d.error)+'</div>';return}
+  if(d.error){hideSplash();$('app').innerHTML='<div class="err">'+esc(d.error)+'</div>';return}
   S.data=d; if(d.notice) toast(esc(d.notice));
   if(d.pushAppId) initPush(d.pushAppId);
   render();
@@ -524,7 +541,7 @@ function onStaff(d){
 function loadBoard(){if(S.busy)return;S.busy=true;call('apiBoard',[KEY,''],onBoard)}
 function onBoard(d){
   $('app').classList.remove('busy');
-  if(d.error){$('app').innerHTML='<div class="err">'+esc(d.error)+'</div>';return}
+  if(d.error){hideSplash();$('app').innerHTML='<div class="err">'+esc(d.error)+'</div>';return}
   if(d.date!==d.today){ S.sched=d; if(d.notice) toast(esc(d.notice)); render(); return; }   // 일정 관리 탭에서 다른 날짜를 연 경우
   var ids=d.alerts.map(function(a){return a.at+a.name+a.stage+a.text});
   if(S.seen){d.alerts.forEach(function(a,i){if(S.seen.indexOf(ids[i])<0&&a.stage!=='푸시 설정'){toast('<b>'+esc(a.name)+'</b> '+esc(a.text),a.stage!=='지연 신고');beep()}})}
