@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>욱's 출근 체크</title>
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest?v=2">
+<link rel="icon" href="icon-192-v2.png">
+<link rel="apple-touch-icon" href="apple-touch-icon-v2.png">
 <meta name="theme-color" content="#1D2633">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -181,7 +181,7 @@ button{cursor:pointer}
 <script>
 // 구글 Apps Script 웹앱 주소 (데이터 서버)
 var API_URL = "https://script.google.com/macros/s/AKfycbzwTOwgYY2BSMt4WpZY8L1OmP7Hz4rHeXQeXuTMGKtfLmxOF-EAQitmsO6sC6c5wyVs/exec";
-var VERSION = 'v16 앱 화면';
+var VERSION = 'v17 미리 계획';
 var QS = new URLSearchParams(location.search);
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -307,8 +307,10 @@ var STAFF={
   return html;
  },
  checkin:function(d){
-  if(!d.shifts.length) return '<div class="empty"><b>오늘 배정된 현장이 없습니다</b>일정이 다르면 관리자에게 알려 주세요.</div>';
-  return d.shifts.map(function(s){
+  var up=(d.upcoming||[]).slice(0,10);
+  var later=up.length?'<div class="sec-t"><h3>다가오는 일정 '+up.length+'건 · 미리 계획</h3></div>'+up.map(upcomingPlan).join(''):'';
+  if(!d.shifts.length) return '<div class="sec-t" style="margin-top:0"><h3>오늘</h3></div><div class="empty"><b>오늘 배정된 현장이 없습니다</b>아래 다가오는 일정의 계획을 미리 입력해 두세요.</div>'+later;
+  return '<div class="sec-t" style="margin-top:0"><h3>오늘 '+d.shifts.length+'건</h3></div>'+d.shifts.map(function(s){
    if(s.confirmed) return card(s)+'<p class="locked">관리자가 '+esc(s.confirmed)+'에 출근 확인을 완료했습니다. 기록을 바꾸려면 관리자에게 요청해 주세요.</p>';
    return card(s)+planHTML(s)+
     '<button class="big go" data-a="depart" data-r="'+s.row+'"'+(s.depAt||s.arrAt?' disabled':'')+'>'+(s.depAt?'출발 완료 '+esc(s.depAt):'출발했어요')+'</button>'+
@@ -316,10 +318,10 @@ var STAFF={
       :'<button class="big warn" data-toggle-delay>'+(s.delay?'더 늦어요 (지금 '+s.delay+'분 신고됨)':'도착 늦어요')+'</button>'):'')+
     '<button class="big ok" data-a="arrive" data-r="'+s.row+'"'+(s.arrAt?' disabled':'')+'>'+(s.arrAt?'도착 완료 '+esc(s.arrAt):'현장 도착')+'</button>'+
     (s.depAt||s.arrAt?'<button class="linkish" data-a="undo" data-r="'+s.row+'">잘못 눌렀어요 (마지막 기록 취소)</button>':'');
-  }).join('');
+  }).join('')+later;
  },
  schedule:function(d){
-  var all=d.shifts.map(function(s){return {row:s.row,date:d.date,site:s.site,depBy:s.depBy,arrBy:s.arrBy,info:s.info,today:true}}).concat(d.upcoming||[]);
+  var all=d.shifts.map(function(s){return {row:s.row,date:d.date,site:s.site,depBy:s.depBy,arrBy:s.arrBy,info:s.info,plan:s.plan,today:true}}).concat(d.upcoming||[]);
   if(S.sub){
    var u=all.find(function(x){return String(x.row)===S.sub});
    if(!u) return '<div class="empty"><b>일정을 찾지 못했습니다</b>목록에서 다시 선택해 주세요.</div>';
@@ -329,7 +331,7 @@ var STAFF={
     (gapHTML(u)?'<div>'+gapHTML(u).replace('class="gap"','class="gap" style="background:var(--app)"')+'</div>':'')+'</div>'+
     (infoHTML(u.info)||'<div class="box small muted">현장 주소·주차·담당자 정보가 아직 없습니다.</div>')+
     (u.depBy?'<div class="box small">🔔 '+md(u.date)+' '+hm(toM(u.depBy)-lead)+' 쯤 알림이 갑니다.</div>':'')+
-    (u.date===d.date?'<button class="big go" data-go="checkin">출근 등록하러 가기</button>':'');
+    (u.date===d.date?'<button class="big go" data-go="checkin">출근 등록하러 가기</button>':planHTML(u,'미리 계획')+'<p class="small muted" style="margin:0 2px">출발·도착 버튼은 당일에 출근 등록 탭에 나타납니다.</p>');
   }
   if(!all.length) return '<div class="empty"><b>잡힌 일정이 없습니다</b>새 일정이 생기면 여기에 표시됩니다.</div>';
   return '<p class="small muted" style="margin:0 2px">오늘 포함 '+all.length+'건</p><div class="list">'+all.map(upItem).join('')+'</div>';
@@ -351,16 +353,25 @@ function upItem(u){
   var d=S.data, today=u.date===(d&&d.date), tmr=d&&u.date===addDay(d.date,1);
   return '<button class="item" data-go="schedule" data-sub="'+u.row+'"><span class="dbox"><b>'+md(u.date).split('/')[1]+'</b><small>'+wd(u.date)+'</small></span><span><div class="ttl">'+(esc(u.site)||'현장 미입력')+(today?' <span class="badge">오늘</span>':tmr?' <span class="badge">내일</span>':'')+'</div><div class="sub">'+md(u.date)+' · 식장 '+(esc(u.depBy)||'-')+' · 식 '+(esc(u.arrBy)||'-')+'</div></span><span class="chev">›</span></button>';
 }
-function planHTML(s){
+function planHTML(s,title){
   var p=s.plan||{}, lock=!!(s.depAt||s.arrAt||s.confirmed), r=s.row, mg=marginText(s.depBy,p.arr);
-  return '<section class="box" data-plan="'+r+'"><div class="sec-t" style="margin:0"><h3>출발 전 계획</h3><span class="small muted">'+(p.at?esc(String(p.at).slice(-5))+' 저장됨':'출발 전에 입력')+'</span></div>'+
+  var at=p.at?String(p.at):'', atTxt=at?(at.slice(0,10)===(S.data&&S.data.date)?at.slice(-5):md(at.slice(0,10))+' '+at.slice(-5))+' 저장됨':'출발 전에 입력';
+  return '<section class="box" data-plan="'+r+'"><div class="sec-t" style="margin:0"><h3>'+(title||'출발 전 계획')+'</h3><span class="small muted">'+esc(atTxt)+'</span></div>'+
     '<div class="pgrid">'+
-    '<label>준비 예정 시간<input type="time" id="pp-prep" value="'+esc(p.prep)+'"'+(lock?' disabled':'')+'></label>'+
-    '<label>출발 예정 시간<input type="time" id="pp-dep" value="'+esc(p.dep)+'"'+(lock?' disabled':'')+'></label>'+
-    '<label>예상 이동 시간(분)<input type="number" inputmode="numeric" min="0" max="600" id="pp-move" value="'+esc(p.move)+'"'+(lock?' disabled':'')+'></label>'+
-    '<label>예상 도착 시간<input type="time" id="pp-arr" value="'+esc(p.arr)+'"'+(lock?' disabled':'')+'></label>'+
-    '</div><p class="margin'+(mg.late?' bad':'')+'" id="pp-margin" data-by="'+esc(s.depBy)+'"'+(mg.text?'':' hidden')+'>'+esc(mg.text)+'</p>'+
+    '<label>준비 예정 시간<input type="time" id="pp-prep-'+r+'" value="'+esc(p.prep)+'"'+(lock?' disabled':'')+'></label>'+
+    '<label>출발 예정 시간<input type="time" id="pp-dep-'+r+'" value="'+esc(p.dep)+'"'+(lock?' disabled':'')+'></label>'+
+    '<label>예상 이동 시간(분)<input type="number" inputmode="numeric" min="0" max="600" id="pp-move-'+r+'" value="'+esc(p.move)+'"'+(lock?' disabled':'')+'></label>'+
+    '<label>예상 도착 시간<input type="time" id="pp-arr-'+r+'" value="'+esc(p.arr)+'"'+(lock?' disabled':'')+'></label>'+
+    '</div><p class="margin'+(mg.late?' bad':'')+'" id="pp-margin-'+r+'" data-by="'+esc(s.depBy)+'"'+(mg.text?'':' hidden')+'>'+esc(mg.text)+'</p>'+
     (lock?'':'<button class="big dark" style="padding:12px;font-size:16px" data-save-plan="'+r+'">계획 저장</button>')+'</section>';
+}
+function planOf(r){var g=function(k){var el=$('pp-'+k+'-'+r);return el?el.value:''};return {prep:g('prep'),dep:g('dep'),move:g('move'),arr:g('arr')}}
+// 다가오는 일정: 날짜·현장 요약 + 미리 계획 입력 (출발·도착 버튼은 당일에)
+function upcomingPlan(u){
+  var d=S.data, tag=u.date===addDay(d.date,1)?' · 내일':'';
+  return '<article class="card s-ready" style="gap:8px"><div class="head"><b>'+md(u.date)+' ('+wd(u.date)+')'+tag+' · '+(esc(u.site)||'현장 미입력')+'</b><button class="link" data-go="schedule" data-sub="'+u.row+'">상세</button></div>'+
+    '<dl class="times"><div><dt>식장 도착 시간</dt><dd>'+(esc(u.depBy)||'--:--')+'</dd></div><div><dt>식 시간</dt><dd>'+(esc(u.arrBy)||'--:--')+'</dd></div></dl></article>'+
+    planHTML(u,'미리 계획')+'<p class="small muted" style="margin:-4px 2px 4px">출발·도착 버튼은 '+md(u.date)+' 당일에 나타납니다.</p>';
 }
 
 /* ================= 관리자 앱 ================= */
@@ -457,7 +468,7 @@ function render(force){
   if(!force&&editing()) return;
   var P=MODE==='admin'?ADMIN:STAFF, T=TITLE[MODE][S.page];
   var title=S.sub?(MODE==='admin'?(S.page==='status'?'직원 상세':T):'일정 상세'):T;
-  var lead=S.sub?'<button class="back" data-back aria-label="뒤로">‹</button>':'<img class="logoimg" src="icon-192.png" alt="욱\'s">';
+  var lead=S.sub?'<button class="back" data-back aria-label="뒤로">‹</button>':'<img class="logoimg" src="icon-192-v2.png" alt="욱\'s">';
   var who=!S.sub?'<span class="who">'+(MODE==='admin'?'관리자 · '+esc(S.data.now):esc(S.data.name)+' 작가 · '+esc(S.data.now))+'</span>':'';
   var lateN=MODE==='admin'?S.data.shifts.filter(function(s){return /late/.test(s.key)}).length:0;
   $('app').innerHTML='<header class="hdr">'+lead+'<h2>'+esc(title)+'</h2>'+who+'</header><main class="main">'+P[S.page](S.data)+'</main>'+
@@ -509,25 +520,25 @@ document.addEventListener('click',function(e){
   if(t.id==='sound'){S.sound=!S.sound;if(S.sound&&!audio){try{audio=new (window.AudioContext||window.webkitAudioContext)()}catch(err){}}render(true);return}
   // 계획 저장
   var sp=t.closest('[data-save-plan]');
-  if(sp){var plan={prep:$('pp-prep').value,dep:$('pp-dep').value,move:$('pp-move').value,arr:$('pp-arr').value};
-    $('app').classList.add('busy');S.busy=true;call('apiPlan',[KEY,sp.dataset.savePlan,plan],function(d){S.planDirty=false;onStaff(d)});return}
+  if(sp){var plan=planOf(sp.dataset.savePlan);
+    $('app').classList.add('busy');S.busy=true;call('apiPlan',[KEY,sp.dataset.savePlan,plan],function(d){S.planDirty=false;S.planRow=null;if(document.activeElement)document.activeElement.blur();onStaff(d)});return}
   if(t.closest('[data-toggle-delay]')){S.showDelay=true;render(true);return}
   // 출발·도착·지연·확인 버튼
   var a=t.closest('[data-a]');
   if(a){
     S.showDelay=false;$('app').classList.add('busy');S.busy=true;
     if(MODE==='admin'){call('apiAdminPress',[KEY,a.dataset.r,a.dataset.a,''],onBoard);return}
-    if(S.planDirty&&a.dataset.a==='depart'&&$('pp-dep')){
-      var plan2={prep:$('pp-prep').value,dep:$('pp-dep').value,move:$('pp-move').value,arr:$('pp-arr').value};
+    if(S.planDirty&&a.dataset.a==='depart'&&String(S.planRow)===String(a.dataset.r)&&$('pp-dep-'+a.dataset.r)){
+      var plan2=planOf(a.dataset.r);
       call('apiPlan',[KEY,a.dataset.r,plan2],function(){S.planDirty=false;S.busy=true;call('apiPress',[KEY,a.dataset.r,'depart'],onStaff)});
     } else call('apiPress',[KEY,a.dataset.r,a.dataset.a],function(d){S.planDirty=false;onStaff(d)});
   }
 });
 document.addEventListener('input',function(e){
-  if(!e.target.closest('[data-plan]')) return;
-  S.planDirty=true;
-  if(e.target.id==='pp-dep'||e.target.id==='pp-move'){var v=addMin($('pp-dep').value,$('pp-move').value);if(v)$('pp-arr').value=v}
-  var w=$('pp-margin');if(w){var mg=marginText(w.dataset.by,$('pp-arr').value);w.textContent=mg.text;w.hidden=!mg.text;w.classList.toggle('bad',!!mg.late)}
+  var box=e.target.closest('[data-plan]'); if(!box) return;
+  var r=box.dataset.plan; S.planDirty=true; S.planRow=r;
+  if(/^pp-(dep|move)-/.test(e.target.id)){var v=addMin($('pp-dep-'+r).value,$('pp-move-'+r).value);if(v)$('pp-arr-'+r).value=v}
+  var w=$('pp-margin-'+r);if(w){var mg=marginText(w.dataset.by,$('pp-arr-'+r).value);w.textContent=mg.text;w.hidden=!mg.text;w.classList.toggle('bad',!!mg.late)}
 });
 document.addEventListener('change',function(e){if(e.target.id==='pick-date'&&e.target.value){S.schedDate=e.target.value;e.target.blur();ensureSched();render(true)}});
 
