@@ -237,13 +237,14 @@ function loadBoard(){ if(S.busy) return; S.busy=true; call('apiBoard',[KEY,S.dat
 function renderBoard(d){
   if(d.error){$('app').innerHTML='<div class="err">'+esc(d.error)+'</div>';return}
   if(!S.date) S.date=d.date;
+  if(d.pushAppId) initPush(d.pushAppId);
   // 새 알림 감지
   var ids=d.alerts.map(function(a){return a.at+a.name+a.stage+a.text});
   if(S.seen&&S.seenDate===d.date){d.alerts.forEach(function(a,i){if(S.seen.indexOf(ids[i])<0){toast('<b>'+esc(a.name)+' 작가</b> '+esc(a.text));beep()}})}
   S.seen=ids;S.seenDate=d.date;S.data=d;
   var c={ready:0,departed:0,delayed:0,arrived:0,confirmed:0,late:0};d.shifts.forEach(function(s){c[s.key==='late10'?'late':s.key]++});
   function chip(k,l,n){return '<div class="count s-'+k+'"><span class="dot"></span><span>'+l+'</span><span class="n">'+n+'</span></div>'}
-  var html='<header class="top"><div><h1>현장 출근 체크 · 관리자</h1><div class="sub">20초마다 자동 새로고침 · 코드 버전 <b>v14 푸시 상태</b></div></div><div class="clock">'+esc(d.now)+'</div></header>'+
+  var html='<header class="top"><div><h1>현장 출근 체크 · 관리자</h1><div class="sub">20초마다 자동 새로고침 · 코드 버전 <b>v15 관리자 푸시</b></div></div><div class="clock">'+esc(d.now)+'</div></header>'+pushHTML()+
     '<div class="bar"><button class="btn" data-day="-1">◀</button><input type="date" id="date" value="'+esc(d.date)+'"><button class="btn" data-day="1">▶</button><button class="btn" data-day="0">오늘</button><span class="spacer"></span><button class="btn'+(S.sound?' on':'')+'" id="sound">'+(S.sound?'알림음 켜짐':'알림음 켜기')+'</button></div>';
   if(!d.shifts.length){html+='<div class="empty"><b>'+(d.date===d.today?'오늘':esc(d.date))+' 배정된 작가가 없습니다</b>구글 시트의 [일정] 탭에 날짜·이름·현장·식장 도착 시간·식 시간을 입력하세요.</div>';$('app').innerHTML=html;return}
   html+='<div class="counts">'+chip('late','지연',c.late)+chip('ready','준비중',c.ready)+chip('departed','출발',c.departed)+chip('delayed','지연 예고',c.delayed)+chip('arrived','도착',c.arrived)+chip('confirmed','출근 완료',c.confirmed)+'</div>'+
@@ -326,7 +327,7 @@ document.addEventListener('change',function(e){if(e.target.id==='date'&&e.target
 var PUSH={inited:false,state:'none',os:null};
 function isIOS(){return /iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)}
 function isStandalone(){return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true}
-function pushRerender(){if(MODE!=='admin'&&S.data&&!S.planDirty&&!S.showDelay)renderStaff(S.data)}
+function pushRerender(){if(!S.data)return;if(MODE==='admin')renderBoard(S.data);else if(!S.planDirty&&!S.showDelay)renderStaff(S.data)}
 function initPush(appId){
   if(PUSH.inited) return; PUSH.inited=true;
   if(isIOS()&&!isStandalone()){PUSH.state='ios-browser';reportPush();return}
@@ -349,14 +350,15 @@ function initPush(appId){
 // 알림 상태가 바뀌었을 때만 관리자 시트([직원] E열)에 알림
 function reportPush(){
   var key='uk-push-reported-'+KEY, st=PUSH.state;
-  if(!KEY||!st||st==='none'||st==='loading'||lsGet(key)===st) return;
+  if(MODE==='admin'||!KEY||!st||st==='none'||st==='loading'||lsGet(key)===st) return;
   fetch(API_URL,{method:'POST',body:JSON.stringify({fn:'apiPushStatus',args:[KEY,st]})}).then(function(){lsSet(key,st)}).catch(function(){});
 }
 function pushHTML(){
   var st=PUSH.state;
   if(st==='none'||st==='loading') return '';
-  if(st==='on') return '<div class="pushbar on">🔔 알림 켜짐 · 식장 도착 2시간 전에 알려 드려요</div>';
-  if(st==='off') return '<button class="pushbar btn-push" data-push>🔔 알림 켜기 <small>일정 전에 폰으로 알려 드려요</small></button>';
+  var adm=MODE==='admin';
+  if(st==='on') return '<div class="pushbar on">🔔 알림 켜짐 · '+(adm?'출발·지연·도착 소식을 알려 드려요':'일정 전과 확인이 필요할 때 알려 드려요')+'</div>';
+  if(st==='off') return '<button class="pushbar btn-push" data-push>🔔 알림 켜기 <small>'+(adm?'작가 출발·지연·도착을 폰으로 받아요':'일정 전에 폰으로 알려 드려요')+'</small></button>';
   if(st==='ios-browser') return '<div class="pushbar">아이폰은 <b>홈 화면에 추가한 앱</b>에서만 알림을 받을 수 있어요. Safari 공유 버튼 → 홈 화면에 추가 후, 그 앱을 열어 알림을 켜 주세요.</div>';
   if(st==='denied') return '<div class="pushbar">알림이 차단돼 있어요. 휴대폰 설정 → 알림에서 이 앱(또는 브라우저)의 알림을 허용해 주세요.</div>';
   if(st==='unsupported') return '<div class="pushbar">이 브라우저는 알림을 지원하지 않아요. 크롬이나 Safari(홈 화면 앱)를 이용해 주세요.</div>';
