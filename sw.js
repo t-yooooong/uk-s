@@ -1,4 +1,2 @@
-// 설치용 최소 서비스워커: 항상 최신 화면을 서버에서 받아옵니다(캐시 안 함).
-self.addEventListener('install', function () { self.skipWaiting(); });
-self.addEventListener('activate', function (e) { e.waitUntil(self.clients.claim()); });
-self.addEventListener('fetch', function () { /* 네트워크 그대로 사용 */ });
+// 예전에 설치된 앱도 푸시를 받을 수 있도록 OneSignal 워커를 그대로 불러옵니다.
+importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");

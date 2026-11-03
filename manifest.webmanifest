@@ -1,6 +1,6 @@
 {
-  "name": "현장 출근 체크",
-  "short_name": "출근 체크",
+  "name": "욱's 출근 체크",
+  "short_name": "욱's",
   "description": "현장 작가 출발·도착 체크",
   "scope": "./",
   "display": "standalone",
@@ -8,8 +8,23 @@
   "theme_color": "#1D2633",
   "lang": "ko",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

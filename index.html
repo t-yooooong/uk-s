@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>출근 체크</title>
+<title>욱's 출근 체크</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#1D2633">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="출근 체크">
+<meta name="apple-mobile-web-app-title" content="욱's">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
 <style>
@@ -100,6 +100,10 @@ h1{margin:0;font-size:22px}
 .badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--go-bg);color:var(--go);margin-left:4px}
 .noterow{display:flex;justify-content:space-between;align-items:center;gap:6px 10px;flex-wrap:wrap}
 .gap{font-size:12.5px;color:var(--muted);background:var(--surface);border-radius:99px;padding:2px 10px;white-space:nowrap}.gap b{color:var(--ink)}
+.pushbar{display:block;width:100%;text-align:left;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:13.5px;line-height:1.45}
+.pushbar.on{background:var(--go-bg);color:var(--go);border-color:transparent;font-weight:600}
+.btn-push{background:var(--go);color:#fff;border:0;font-weight:700;font-size:16px;text-align:center}
+.btn-push small{display:block;font-weight:500;font-size:12px;opacity:.85}
 .plan{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
 .plan h2{margin:0;font-size:16px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .plan h2 small{font-size:12px;font-weight:500;color:var(--muted)}
@@ -236,7 +240,7 @@ function renderBoard(d){
   S.seen=ids;S.seenDate=d.date;S.data=d;
   var c={ready:0,departed:0,delayed:0,arrived:0,confirmed:0,late:0};d.shifts.forEach(function(s){c[s.key==='late10'?'late':s.key]++});
   function chip(k,l,n){return '<div class="count s-'+k+'"><span class="dot"></span><span>'+l+'</span><span class="n">'+n+'</span></div>'}
-  var html='<header class="top"><div><h1>현장 출근 체크 · 관리자</h1><div class="sub">20초마다 자동 새로고침 · 코드 버전 <b>v12 앱</b></div></div><div class="clock">'+esc(d.now)+'</div></header>'+
+  var html='<header class="top"><div><h1>현장 출근 체크 · 관리자</h1><div class="sub">20초마다 자동 새로고침 · 코드 버전 <b>v13 푸시</b></div></div><div class="clock">'+esc(d.now)+'</div></header>'+
     '<div class="bar"><button class="btn" data-day="-1">◀</button><input type="date" id="date" value="'+esc(d.date)+'"><button class="btn" data-day="1">▶</button><button class="btn" data-day="0">오늘</button><span class="spacer"></span><button class="btn'+(S.sound?' on':'')+'" id="sound">'+(S.sound?'알림음 켜짐':'알림음 켜기')+'</button></div>';
   if(!d.shifts.length){html+='<div class="empty"><b>'+(d.date===d.today?'오늘':esc(d.date))+' 배정된 작가가 없습니다</b>구글 시트의 [일정] 탭에 날짜·이름·현장·식장 도착 시간·식 시간을 입력하세요.</div>';$('app').innerHTML=html;return}
   html+='<div class="counts">'+chip('late','지연',c.late)+chip('ready','준비중',c.ready)+chip('departed','출발',c.departed)+chip('delayed','지연 예고',c.delayed)+chip('arrived','도착',c.arrived)+chip('confirmed','출근 완료',c.confirmed)+'</div>'+
@@ -254,7 +258,8 @@ function renderStaff(d){
   if(d.error){$('app').innerHTML='<div class="err">'+esc(d.error)+'</div>';return}
   S.data=d;
   if(d.notice) toast(esc(d.notice),true);
-  var html='<div class="me"><header class="top"><div><h1>'+esc(d.name)+' 작가님</h1><div class="sub">'+esc(d.date)+' 출근 체크</div></div><div class="clock">'+esc(d.now)+'</div></header>';
+  if(d.pushAppId) initPush(d.pushAppId);
+  var html='<div class="me"><header class="top"><div><h1>'+esc(d.name)+' 작가님</h1><div class="sub">'+esc(d.date)+' 출근 체크</div></div><div class="clock">'+esc(d.now)+'</div></header>'+pushHTML();
   if(!d.shifts.length) html+='<div class="empty"><b>오늘 배정된 현장이 없습니다</b>일정이 다르면 관리자에게 알려 주세요.</div>';
   d.shifts.forEach(function(s){
     if(s.confirmed){html+=card(s,false)+'<p class="locked">관리자가 '+esc(s.confirmed)+'에 출근 확인을 완료했습니다. 기록을 바꾸려면 관리자에게 요청해 주세요.</p>';return}
@@ -314,7 +319,48 @@ document.addEventListener('input',function(e){
 });
 document.addEventListener('change',function(e){if(e.target.id==='date'&&e.target.value){S.date=e.target.value;S.seen=null;S.busy=false;loadBoard()}});
 
-if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){})}
+/* ---------- 폰 푸시 알림 (OneSignal) ---------- */
+var PUSH={inited:false,state:'none',os:null};
+function isIOS(){return /iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)}
+function isStandalone(){return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true}
+function pushRerender(){if(MODE!=='admin'&&S.data&&!S.planDirty&&!S.showDelay)renderStaff(S.data)}
+function initPush(appId){
+  if(PUSH.inited) return; PUSH.inited=true;
+  if(isIOS()&&!isStandalone()){PUSH.state='ios-browser';return}
+  if(!('Notification' in window)||!('serviceWorker' in navigator)){PUSH.state='unsupported';return}
+  PUSH.state='loading';
+  window.OneSignalDeferred=window.OneSignalDeferred||[];
+  var sc=document.createElement('script');sc.src='https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';sc.defer=true;document.head.appendChild(sc);
+  OneSignalDeferred.push(async function(OneSignal){
+    try{
+      var base=location.pathname.replace(/[^\/]*$/,'');   // 예: /uk-s/
+      await OneSignal.init({appId:appId,serviceWorkerPath:base.slice(1)+'OneSignalSDKWorker.js',serviceWorkerParam:{scope:base}});
+      PUSH.os=OneSignal;
+      if(OneSignal.Notifications.permission){await OneSignal.login(KEY);PUSH.state='on'}
+      else PUSH.state=(window.Notification&&Notification.permission==='denied')?'denied':'off';
+    }catch(e){PUSH.state='error'}
+    pushRerender();
+  });
+}
+function pushHTML(){
+  var st=PUSH.state;
+  if(st==='none'||st==='loading') return '';
+  if(st==='on') return '<div class="pushbar on">🔔 알림 켜짐 · 식장 도착 2시간 전에 알려 드려요</div>';
+  if(st==='off') return '<button class="pushbar btn-push" data-push>🔔 알림 켜기 <small>일정 전에 폰으로 알려 드려요</small></button>';
+  if(st==='ios-browser') return '<div class="pushbar">아이폰은 <b>홈 화면에 추가한 앱</b>에서만 알림을 받을 수 있어요. Safari 공유 버튼 → 홈 화면에 추가 후, 그 앱을 열어 알림을 켜 주세요.</div>';
+  if(st==='denied') return '<div class="pushbar">알림이 차단돼 있어요. 휴대폰 설정 → 알림에서 이 앱(또는 브라우저)의 알림을 허용해 주세요.</div>';
+  if(st==='unsupported') return '<div class="pushbar">이 브라우저는 알림을 지원하지 않아요. 크롬이나 Safari(홈 화면 앱)를 이용해 주세요.</div>';
+  return '<div class="pushbar">알림 설정을 불러오지 못했어요. 잠시 후 다시 열어 주세요.</div>';
+}
+document.addEventListener('click',async function(e){
+  if(!e.target.closest('[data-push]')||!PUSH.os) return;
+  try{
+    await PUSH.os.Notifications.requestPermission();
+    if(PUSH.os.Notifications.permission){await PUSH.os.login(KEY);PUSH.state='on';toast('알림을 켰어요.',true)}
+    else PUSH.state='denied';
+  }catch(err){PUSH.state='error'}
+  pushRerender();
+});
 // 앱을 다시 열거나 화면으로 돌아오면 바로 새로고침
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'){S.busy=false;MODE==='admin'?loadBoard():loadStaff()}});
 if(MODE==='admin'){loadBoard();setInterval(loadBoard,20000)}
