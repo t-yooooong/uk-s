@@ -193,7 +193,7 @@ button{cursor:pointer}
 <script>
 // 구글 Apps Script 웹앱 주소 (데이터 서버)
 var API_URL = "https://script.google.com/macros/s/AKfycbzwTOwgYY2BSMt4WpZY8L1OmP7Hz4rHeXQeXuTMGKtfLmxOF-EAQitmsO6sC6c5wyVs/exec";
-var VERSION = 'v1.0';
+var VERSION = 'v1.1';
 var LOGO = document.querySelector('#splash img').getAttribute('src');   // 로고는 파일에 내장 (아이콘 파일이 없어도 보이게)
 var QS = new URLSearchParams(location.search);
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
@@ -439,7 +439,7 @@ var ADMIN={
   if(!sd) return html+'<div class="empty"><b>불러오는 중</b>'+md(sel)+' 일정을 가져오고 있어요.</div>';
   var list=sd.shifts.slice().sort(function(a,b){return String(a.depBy).localeCompare(String(b.depBy))});
   html+='<div class="sec-t"><h3>'+md(sel)+' ('+wd(sel)+') 일정 '+list.length+'건</h3></div>';
-  html+=list.length?'<div class="list">'+list.map(function(s){return '<button class="item s-'+s.key+'" data-edit="'+s.row+'"><span class="dbox"><b class="mono" style="font-size:14px">'+(esc(s.depBy)||'--:--')+'</b><small>식장</small></span><span><div class="ttl">'+(esc(s.site)||'현장 미입력')+'</div><div class="sub">'+esc(s.name)+' · 식 '+(esc(s.arrBy)||'-')+(s.info&&s.info.addr?' · '+esc(s.info.addr):'')+'</div></span><span class="chev">✎</span></button>'}).join('')+'</div>'
+  html+=list.length?'<div class="list">'+list.map(function(s){return '<button class="item s-'+s.key+'" data-edit="'+s.row+'"><span class="dbox"><b class="mono" style="font-size:14px">'+(esc(s.depBy)||'--:--')+'</b><small>식장</small></span><span><div class="ttl">'+(esc(s.site)||'현장 미입력')+'</div><div class="sub">'+esc(s.name)+' · 식 '+(esc(s.arrBy)||'-')+(s.info&&s.info.addr?' · '+esc(s.info.addr):'')+'</div>'+planLine(s)+'</span><span class="chev">✎</span></button>'}).join('')+'</div>'
     :'<div class="empty"><b>이 날은 일정이 없습니다</b>+ 일정 추가로 넣어 보세요.</div>';
   return html;
  },
@@ -452,10 +452,17 @@ var ADMIN={
  }
 };
 
+// 일정 관리 목록용 작가 계획 한 줄
+function planLine(s){
+  var p=s.plan||{};
+  if(!p.dep&&!p.arr&&!p.prep) return '<div class="sub" style="color:var(--late)">작가 계획 미입력</div>';
+  var mg=marginText(s.depBy,p.arr);
+  return '<div class="sub">계획 · 준비 '+(esc(p.prep)||'-')+' · 출발 '+(esc(p.dep)||'-')+' · 도착 '+(esc(p.arr)||'-')+(mg.text?' · <b style="color:'+(mg.late?'var(--late)':'var(--ok)')+'">'+(mg.late?'늦음 ':'여유 ')+esc(mg.text.replace(/[^0-9]/g,''))+'분</b>':'')+'</div>';
+}
 /* ---------- 일정 추가·수정 창 ---------- */
 function openSheet(row){
   var d=S.sched||S.data, s=row?d.shifts.find(function(x){return String(x.row)===String(row)}):null;
-  S.sheet=s?{row:s.row,date:d.date,name:s.name,site:s.site,depBy:s.depBy,arrBy:s.arrBy,addr:(s.info||{}).addr||'',park:(s.info||{}).park||'',contact:(s.info||{}).contact||'',memo:(s.info||{}).memo||'',hasRecord:!!(s.depAt||s.arrAt)}
+  S.sheet=s?{plan:s.plan,depByOrig:s.depBy,row:s.row,date:d.date,name:s.name,site:s.site,depBy:s.depBy,arrBy:s.arrBy,addr:(s.info||{}).addr||'',park:(s.info||{}).park||'',contact:(s.info||{}).contact||'',memo:(s.info||{}).memo||'',hasRecord:!!(s.depAt||s.arrAt)}
     :{date:S.schedDate||S.data.today,name:'',site:'',depBy:'',arrBy:'',addr:'',park:'',contact:'',memo:''};
   renderSheet();
 }
@@ -472,6 +479,7 @@ function renderSheet(){
    '<label class="full">주차<input id="f-park" value="'+esc(f.park)+'" placeholder="예: 지하 2층, 2시간 무료"></label>'+
    '<label class="full">담당자 연락처<input id="f-contact" value="'+esc(f.contact)+'" placeholder="예: 홍길동 실장 010-1234-5678"></label>'+
    '<label class="full">메모<textarea id="f-memo" placeholder="예: 신부대기실 2층, 드레스 촬영 먼저">'+esc(f.memo)+'</textarea></label></div>'+
+   (f.row?'<div class="box" style="padding:10px 12px"><b class="small">작가가 입력한 계획</b>'+planSum({plan:f.plan,depBy:f.depByOrig})+'</div>':'')+
    (f.hasRecord?'<p class="small muted" style="margin:0">이미 출발·도착 기록이 있는 일정입니다. 시간을 바꾸면 지연 판정도 바뀝니다.</p>':'')+
    '<button class="big dark" data-save>저장</button>'+
    (f.row?'<button class="big line" data-del>'+(f.confirmDel?'한 번 더 누르면 삭제됩니다':'일정 삭제')+'</button>':'')+
